@@ -9,6 +9,42 @@ Uses both Anthropic and OpenAI models: Claude (Fable/Sonnet/Haiku) plans,
 implements, and orchestrates the whole run, while OpenAI's Codex (`codex exec`)
 runs as an independent second opinion in the local review loop.
 
+## Principles
+
+1. **Human in the loop where it matters, AI for the rest.** The user's judgment
+   is required at exactly two points — approving the plan and signing off on
+   the QA evidence — because those are the decisions only they can make: what
+   the ticket actually means, and whether the result is actually right. Every
+   mechanical step in between (fetching the ticket, writing code, running
+   tests, opening the PR) runs unattended, so the human's attention goes to
+   the two decisions that need it, not to babysitting the rest.
+
+2. **The system compounds — it doesn't just execute.** Every run is supposed
+   to leave the codebase a little smarter, not just a little more complete.
+   That happens in the "distill lessons" step at the end of the PR phase: a
+   fresh, uninvolved agent looks at what went wrong during the run (a gate
+   failure, a review finding, a user correction, a plan revision) and, only
+   if there's a real, durable, non-obvious lesson, writes it back into
+   `docs/architecture/` (how the system is designed) or a paths-scoped rules
+   file (how to work in a given area) — updating an existing entry rather than
+   piling on duplicates. Those files are exactly what `tackle-planner` reads
+   before writing the next plan, so a mistake made once becomes a constraint
+   the next ticket's plan is checked against, instead of a mistake made again.
+
+3. **Different models for different jobs, and a second model checking the
+   first.** Planning is a small amount of output that has to be right, so it
+   goes to the strongest reasoning model (Fable) working alone. Implementation
+   is a large amount of output that's cheap to parallelize, so it fans out
+   across faster models (Sonnet), one agent per independent slice, with
+   mechanical steps routed to the cheapest model that can do them (Haiku).
+   Verification and review get the same split: browser QA and design review
+   run in parallel against the built artifact, and the code review step
+   deliberately hands the diff to a *different vendor's* model — OpenAI's
+   Codex, not Claude — because a second model with a different training
+   history and different blind spots catches mistakes a model is unlikely to
+   catch in its own work. The result is checked by more than one kind of
+   intelligence before a human ever sees it.
+
 ## How to use it
 
 1. Copy `.claude/` and `docs/` into your project (see [What's here](#whats-here)).
